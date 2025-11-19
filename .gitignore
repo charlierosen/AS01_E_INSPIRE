@@ -7,10 +7,11 @@ data/fits_shortlist
 outdated/MILES_SSP
 data/stacked_fits
 data/regression_results
-scripts/__pycache__
 data
 notebooks/.DS_Store
 .DS_Store
+**/__pycache__
+legacy/outdated/*
 
 outputs/ppxf_fits
 outputs/sfh_plots
