@@ -68,7 +68,7 @@ def test_model_on_INSPIRE(name, model_class, model_params, FEATURES, test_df, tr
     return test_r2, train_avg_r2
 
 
-def run_model_comparison(random_seeds=None):
+def run_model_comparison(random_seeds=None, show_inline=False):
 
     if random_seeds is None:
         random_seeds = [42, 123, 456, 789, 1010]
@@ -202,15 +202,23 @@ def run_model_comparison(random_seeds=None):
     agg_results.columns = ['_'.join(col).strip('_') if isinstance(col, tuple) else col for col in agg_results.columns.values]
     
     # Create the plots as separate figures
-    create_performance_plots(agg_results)
+    create_performance_plots(agg_results, show_inline=show_inline)
     
     return results_df, agg_results
 
 
-def create_performance_plots(results_df):
+def create_performance_plots(results_df, show_inline=False):
     """
     Create separate plots for test and training performance
     """
+    # Lazy import to avoid IPython dependency in pure script runs
+    display = None
+    if show_inline:
+        try:
+            from IPython.display import display as ipy_display
+            display = ipy_display
+        except Exception:
+            display = None
     # Set plot style
     plt.rcParams.update({
         "text.usetex": True,
@@ -225,39 +233,39 @@ def create_performance_plots(results_df):
         key=lambda x: results_df[results_df['model_id'] == x]['features'].iloc[0]
     )
     
-    # Create test performance plot
-    plt.figure(figsize=(14, 8))
-    ax = plt.gca()
-    
-    """create_single_performance_plot(
-        results_df, 
-        ax, 
-        ordered_model_ids, 
-        metric='test_r2_mean', 
+    # Create and save test performance plot
+    fig, ax = plt.subplots(figsize=(14, 8))
+    create_single_performance_plot(
+        results_df,
+        ax,
+        ordered_model_ids,
+        metric='test_r2_mean',
         err_metric='test_r2_std',
-        title='', 
+        title='',
         ylabel='Test $R^2$'
     )
     plt.tight_layout()
-    #plt.savefig('../outputs/tests/model_comparison_test.pdf', bbox_inches='tight')
-    #plt.savefig('../outputs/tests/model_comparison_test.png', bbox_inches='tight')
-    plt.close()"""
+    plt.savefig('../outputs/tests/model_comparison_test.pdf', bbox_inches='tight')
+    if show_inline and display:
+        display(fig)
+    plt.close(fig)
     
-    # Create training performance plot
-    plt.figure(figsize=(14, 8))
-    ax = plt.gca()
+    # Create and save training performance plot
+    fig, ax = plt.subplots(figsize=(14, 8))
     create_single_performance_plot(
-        results_df, 
-        ax, 
-        ordered_model_ids, 
-        metric='train_r2_mean', 
+        results_df,
+        ax,
+        ordered_model_ids,
+        metric='train_r2_mean',
         err_metric='train_r2_std',
-        title='', 
+        title='',
         ylabel='Train $R^2$'
     )
     plt.tight_layout()
     plt.savefig('../outputs/tests/model_comparison_train.pdf', bbox_inches='tight')
-    plt.close()
+    if show_inline and display:
+        display(fig)
+    plt.close(fig)
     
     print("Created separate test and training performance plots")
 
@@ -271,7 +279,7 @@ def create_single_performance_plot(results_df, ax, ordered_model_ids, metric, er
     
     # Define colors and markers
     colors = {
-        'Random Forest': 'blue',
+        'RandomForest': 'blue',
         'XGBoost': 'red',
         'Ridge': 'orange',
         'SVR': 'green'
