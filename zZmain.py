@@ -3,9 +3,9 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-from scripts.cluster_3_regions import run_clustering_3_combined
-from scripts.stack_spectra import stack_spectra
-from scripts.stacked_ppxf_fitting import fit_spectra
+from zClustering.cluster_3_regions import run_clustering_3_combined
+from zClustering.stack_spectra import stack_spectra
+from zClustering.stacked_ppxf_fitting import fit_spectra
 
 def setup_directories():
     directories = [
@@ -138,15 +138,15 @@ def main(binary = False):
     setup_directories()
     print("Binary==", binary)
 
-    #from scripts.rf_export_grouping import run_clustering
+    #from zClustering.rf_export_grouping import run_clustering
     #run_clustering(binary=False, binary_threshold=0.4, small_boundary=0.35, large_boundary=0.6)
 
     if not binary:
-        from scripts.cluster_3_regions import run_clustering_3_combined
+        from zClustering.cluster_3_regions import run_clustering_3_combined
         run_clustering_3_combined(small_boundary=0.45, large_boundary=0.6)
 
     else:
-        from scripts.cluster_2_regions import run_clustering_single_threshold
+        from zClustering.cluster_2_regions import run_clustering_single_threshold
         run_clustering_single_threshold(threshold=0.6)
 
     process_clusters()
