@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from scripts.ned_calculator import NedCalculator
+from src.ned_calculator import NedCalculator
 
 
 def prepare_data(columns, restricted=False, pc=False, mix_datasets=True, test_size=0.2, random_state=1):
