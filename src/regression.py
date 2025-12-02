@@ -623,7 +623,7 @@ def visualize_ensemble_predictions_combined_residuals_DO_NOT_USE(model_name):
           ncol=3, frameon=True, fontsize=20, title='SNR Categories')
     
     # plt.show()
-    plt.savefig(f'../outputs/tests/{model_name}_combined_ensemble.pdf', bbox_inches='tight')
+    plt.savefig(f'outputs/tests/{model_name}_combined_ensemble.pdf', bbox_inches='tight')
     plt.close()
     
     return True
@@ -803,7 +803,7 @@ def visualize_ensemble_predictions_combined(model_name):
     fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.08),
           ncol=3, frameon=True, fontsize=20, title='SNR Categories')
     
-    plt.savefig(f'../outputs/tests/{model_name}_combined_ensemble.pdf', bbox_inches='tight')
+    plt.savefig(f'outputs/tests/{model_name}_combined_ensemble.pdf', bbox_inches='tight')
     plt.close()
     
     return True
@@ -870,7 +870,7 @@ def calculate_ensemble_metrics():
     print("=" * 120)
     
     # Save to CSV
-    ensemble_results.to_csv('../outputs/tests/ensemble_results.csv', index=False)
+    ensemble_results.to_csv('outputs/tests/ensemble_results.csv', index=False)
     
     return ensemble_results
 
@@ -1045,13 +1045,13 @@ def plot_feature_importances():
     ax.set_xlabel("Feature")
 
     plt.tight_layout()
-    plt.savefig('../outputs/tests/feature_imp_map.pdf', bbox_inches='tight')
+    plt.savefig('outputs/tests/feature_imp_map.pdf', bbox_inches='tight')
 
     # Save the importance data to CSV with proper feature names
     # Create a copy of importance_df with renamed features
     export_df = importance_df.copy()
     export_df['Feature'] = export_df['Feature'].map(feature_names).fillna(export_df['Feature'])
-    # export_df.to_csv('../outputs/tests/avg_feature_importances.csv', index=False)
+    # export_df.to_csv('outputs/tests/avg_feature_importances.csv', index=False)
 
     return importance_df
 
@@ -1173,7 +1173,7 @@ def plot_features_with_target(df, features, feature_display_names, target='DoR',
     # Use larger wspace to increase horizontal spacing between subplots
     plt.tight_layout()
     fig.subplots_adjust(wspace=0.3, hspace=0.1)
-    plt.savefig(f'../outputs/tests/corner_plain.pdf')
+    plt.savefig(f'outputs/tests/corner_plain.pdf')
     
     return fig
 
@@ -1319,7 +1319,7 @@ def plot_features_colored_by_target(df, features, feature_display_names, target=
     plt.tight_layout()
     fig.subplots_adjust(wspace=0.1, hspace=0.1, right=0.9)
     
-    plt.savefig(f'../outputs/tests/corner_dor_coloured.pdf')
+    plt.savefig(f'outputs/tests/corner_dor_coloured.pdf')
     
     return fig
 
@@ -1427,8 +1427,8 @@ def plot_features_by_dataset(train_df, test_df, features, feature_display_names=
     plt.tight_layout()
     fig.subplots_adjust(wspace=0.1, hspace=0.1)
     
-    plt.savefig('../outputs/tests/combined_corner.pdf')
-    #plt.savefig('../outputs/tests/combined_corner.png')
+    plt.savefig('outputs/tests/combined_corner.pdf')
+    #plt.savefig('outputs/tests/combined_corner.png')
 
     return fig
 

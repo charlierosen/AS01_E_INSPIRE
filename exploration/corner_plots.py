@@ -98,7 +98,7 @@ def plot_features_with_target(df, features, feature_display_names, target='DoR',
 
     plt.tight_layout()
     fig.subplots_adjust(wspace=0.1, hspace=0.1)
-    # plt.savefig(f'../outputs/make_plots_output/corner_plain{suffix}.pdf')
+    # plt.savefig(f'outputs/make_plots_output/corner_plain{suffix}.pdf')
 
     return fig
 
@@ -193,7 +193,7 @@ def plot_features_colored_by_target(df, features, feature_display_names, target=
     plt.tight_layout()
     fig.subplots_adjust(wspace=0.1, hspace=0.1, right=0.9)
 
-    # plt.savefig(f'../outputs/make_plots_output/corner_dor_coloured{suffix}.pdf')
+    # plt.savefig(f'outputs/make_plots_output/corner_dor_coloured{suffix}.pdf')
 
     return fig
 

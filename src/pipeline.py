@@ -19,7 +19,7 @@ FEATURE_SETS = [
 ]
 
 
-def reset_output_dir(path='../outputs/tests'):
+def reset_output_dir(path='outputs/tests'):
     if os.path.isdir(path):
         shutil.rmtree(path)
     os.makedirs(path, exist_ok=True)
@@ -105,7 +105,7 @@ def plot_feature_histograms(train_df, test_df):
         ax.set_xlim(min_val, max_val)
         ax.legend()
     plt.tight_layout()
-    plt.savefig('../outputs/tests/train_test_histo.pdf')
+    plt.savefig('outputs/tests/train_test_histo.pdf')
     plt.close()
 
 

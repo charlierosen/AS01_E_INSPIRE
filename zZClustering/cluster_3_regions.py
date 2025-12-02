@@ -919,4 +919,4 @@ def run_clustering_3_combined(file='data/E-INSPIRE_I_master_catalogue.csv', smal
 
 
 if __name__ == "__main__":
-    run_clustering_3_combined(file='../data/E-INSPIRE_I_master_catalogue.csv', output_path='../outputs/make_plots_output', csv_prefix='../')
+    run_clustering_3_combined(file='../data/E-INSPIRE_I_master_catalogue.csv', output_path='outputs/make_plots_output', csv_prefix='../')
