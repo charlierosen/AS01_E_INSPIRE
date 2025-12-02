@@ -1,6 +1,5 @@
 .idea
 
-outputs
 data/MILES_SSP_SAFE
 data/cluster_results
 data/fits_shortlist
@@ -17,3 +16,8 @@ outputs/ppxf_fits
 outputs/sfh_plots
 outputs/stacked_catalogues
 data/INSPIRE_SPEC
+
+outputs/*/*.pdf
+outputs/*/*.png
+outputs/*/*.fits
+outputs/*/*.csv

@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from scripts.ned_calculator import NedCalculator
 
 
-def prepare_data(columns, restricted=False, pc=False):
+def prepare_data(columns, restricted=False, pc=False, mix_datasets=True, test_size=0.2, random_state=1):
     
     if restricted:
         test_df = pd.read_csv('refitting_results/output.csv') #### version with restricted reanalysed INSPIRE catalogue - will need a lot of work, defo not ready for use i think. 
@@ -152,8 +152,13 @@ def prepare_data(columns, restricted=False, pc=False):
     
     train_df['Source'] = 1
     test_df['Source'] = 0
-    combined_df = pd.concat([train_df, test_df], ignore_index=True)
-    
-    train_df, test_df = train_test_split(combined_df, test_size=0.2, random_state=1)
+
+    if mix_datasets:
+        combined_df = pd.concat([train_df, test_df], ignore_index=True)
+        train_df, test_df = train_test_split(
+            combined_df,
+            test_size=test_size,
+            random_state=random_state,
+        )
 
     return train_df, test_df
