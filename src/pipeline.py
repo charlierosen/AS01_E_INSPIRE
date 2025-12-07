@@ -25,7 +25,7 @@ def reset_output_dir(path='outputs/paper_plots'):
     os.makedirs(path, exist_ok=True)
 
 
-def run_baseline_regressions(train_df, test_df, random_states, plotting=False):
+def run_baseline_regressions(train_df, test_df, random_states, plotting=False, tag=None):
     for random_state in random_states:
         model_params = {
             'max_depth': 8,
@@ -37,8 +37,9 @@ def run_baseline_regressions(train_df, test_df, random_states, plotting=False):
             'random_state': random_state,
         }
         for name, features in FEATURE_SETS:
+            labeled_name = f"{name} [{tag}]" if tag else name
             regression.test_regression_on_INSPIRE(
-                name,
+                labeled_name,
                 features,
                 test_df,
                 train_df,
@@ -48,7 +49,7 @@ def run_baseline_regressions(train_df, test_df, random_states, plotting=False):
             )
 
 
-def plot_feature_histograms(train_df, test_df):
+def plot_feature_histograms(train_df, test_df, tag=None):
     plt.rcParams.update({
         "text.usetex": True,
         "font.family": "Computer Modern",
@@ -73,6 +74,13 @@ def plot_feature_histograms(train_df, test_df):
 
     def get_display_name(feature):
         return feature_names.get(feature, feature)
+
+    if tag and tag.lower() == 'mixed':
+        train_label = 'Train (mixed)'
+        test_label = 'Test (mixed)'
+    else:
+        train_label = 'E-INSPIRE'
+        test_label = 'INSPIRE'
 
     fig, axes = plt.subplots(2, 4, figsize=(16, 8))
     axes = axes.flatten()
@@ -100,7 +108,7 @@ def plot_feature_histograms(train_df, test_df):
             bins=bins,
             color='blue',
             alpha=0.6,
-            label='E-INSPIRE',
+            label=train_label,
             ax=ax,
             stat='density',
         )
@@ -109,7 +117,7 @@ def plot_feature_histograms(train_df, test_df):
             bins=bins,
             color='orange',
             alpha=0.6,
-            label='INSPIRE',
+            label=test_label,
             ax=ax,
             stat='density',
         )
@@ -119,7 +127,11 @@ def plot_feature_histograms(train_df, test_df):
         ax.set_xlim(min_val, max_val)
         ax.legend()
     plt.tight_layout()
-    plt.savefig('outputs/paper_plots/train_test_histo.pdf')
+    suffix = ''
+    if tag:
+        safe_tag = tag.replace(' ', '_').replace('→', 'to')
+        suffix = f'_{safe_tag}'
+    plt.savefig(f'outputs/paper_plots/train_test_histo{suffix}.pdf')
     plt.close()
 
 

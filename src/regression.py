@@ -629,7 +629,7 @@ def visualize_ensemble_predictions_combined_residuals_DO_NOT_USE(model_name):
     return True
 
 
-def visualize_ensemble_predictions_combined(model_name):
+def visualize_ensemble_predictions_combined(model_name, train_df_override=None, test_df_override=None):
     
     top = 0.9
     bottom = 0
@@ -664,11 +664,14 @@ def visualize_ensemble_predictions_combined(model_name):
     ax_test = fig.add_subplot(gs[1, 0], sharex=ax_train)
 
     # Process and plot each dataset - train first, then test
+    train_df_local = train_df_override if train_df_override is not None else train_df
+    test_df_local = test_df_override if test_df_override is not None else test_df
+
     datasets = [
         {"name": "train", "ax": ax_train, "predictions": train_predictions, 
-         "df": train_df, "id_field": None},
+         "df": train_df_local, "id_field": None},
         {"name": "test", "ax": ax_test, "predictions": test_predictions, 
-         "df": test_df, "id_field": "ID"}
+         "df": test_df_local, "id_field": "ID"}
     ]
     
     all_snr_values = []  # Collect all SNR values for shared colorbar
@@ -804,14 +807,15 @@ def visualize_ensemble_predictions_combined(model_name):
           ncol=3, frameon=True, fontsize=20, title='SNR Categories')
     
 
-    if model_name=="Stel. pop. and structural":
-        plt.savefig(f'outputs/paper_plots/{model_name}_combined_ensemble.pdf', bbox_inches='tight')
+    if model_name.startswith("Stel. pop. and structural"):
+        safe_name = model_name.replace(" ", "_").replace("→", "to")
+        plt.savefig(f'outputs/paper_plots/{safe_name}_combined_ensemble.pdf', bbox_inches='tight')
         plt.close()
     
     return True
 
 
-def calculate_ensemble_metrics(targetName=None):
+def calculate_ensemble_metrics(targetName=None, dataset_frames=None, filter_tags=None, output_path='outputs/paper_plots/ensemble_results.csv'):
     ensemble_results = pd.DataFrame(columns=[
         'name', 
         'features',
@@ -819,8 +823,20 @@ def calculate_ensemble_metrics(targetName=None):
         'train_r2_avg', 'train_r2_std'
     ])
     
+    def extract_tag(model_name):
+        if '[' in model_name and model_name.endswith(']'):
+            return model_name.split('[')[-1].rstrip(']')
+        return None
+    
+    # Optionally filter results by tag
+    if filter_tags:
+        filtered_rows = results_summary['name'].apply(lambda n: extract_tag(n) in filter_tags)
+        working_results = results_summary[filtered_rows]
+    else:
+        working_results = results_summary
+    
     # Group results by model name to handle different random seeds
-    grouped_results = results_summary.groupby('name')
+    grouped_results = working_results.groupby('name')
     
     for name, group in grouped_results:
         # Calculate test R² statistics
@@ -837,10 +853,16 @@ def calculate_ensemble_metrics(targetName=None):
         features = group['features'].iloc[0]
         
         # Create visualizations if desired
+        tag = extract_tag(name)
+        train_override = None
+        test_override = None
+        if dataset_frames and tag in dataset_frames:
+            train_override, test_override = dataset_frames[tag]
+
         if targetName:
-            visualize_ensemble_predictions_combined(targetName)
+            visualize_ensemble_predictions_combined(targetName, train_override, test_override)
         else:
-            visualize_ensemble_predictions_combined(name)
+            visualize_ensemble_predictions_combined(name, train_override, test_override)
 
         # Apply proper rounding for statistical significance
         # First round std to 1 significant figure
@@ -869,7 +891,8 @@ def calculate_ensemble_metrics(targetName=None):
     print("=" * 120)
     
     # Save to CSV
-    ensemble_results.to_csv('outputs/paper_plots/ensemble_results.csv', index=False)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    ensemble_results.to_csv(output_path, index=False)
     
     return ensemble_results
 

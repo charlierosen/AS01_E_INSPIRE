@@ -69,7 +69,7 @@ def test_model_on_INSPIRE(name, model_class, model_params, FEATURES, test_df, tr
     return test_r2, train_avg_r2
 
 
-def run_model_comparison(random_seeds=None, show_inline=False):
+def run_model_comparison(random_seeds=None, show_inline=False, dataset_mode='mixed', dataset_label=None):
 
     if random_seeds is None:
         random_seeds = [42, 123, 456, 789, 1010]
@@ -78,7 +78,9 @@ def run_model_comparison(random_seeds=None, show_inline=False):
     
     # Prepare the data
     columns = ['vdisp','tau','MgFe', 'met_err', 'lin_age_err','met','rad_kpc','logM','DoR']
-    train_df, test_df = prepare_data(columns)
+    mix_datasets = dataset_mode != 'domain_shift'
+    label = dataset_label or ('Mixed' if mix_datasets else 'E-INSPIRE→INSPIRE')
+    train_df, test_df = prepare_data(columns, mix_datasets=mix_datasets)
     
     feature_sets = {
     'Stel. pop.': ['met', 'tau'],
@@ -155,7 +157,8 @@ def run_model_comparison(random_seeds=None, show_inline=False):
             'test_r2': [],
             'train_r2': [],
             'features': [],
-            'seed': []
+            'seed': [],
+            'dataset': []
         }
         
         # Run each model on each feature set
@@ -183,6 +186,7 @@ def run_model_comparison(random_seeds=None, show_inline=False):
                 seed_results['train_r2'].append(train_r2)
                 seed_results['features'].append(len(features))
                 seed_results['seed'].append(seed)
+                seed_results['dataset'].append(label)
                 
                 elapsed = time.time() - start_time
                 print(f"    {model_id} ({len(features)} features): Test R²: {test_r2:.4f}, Train CV R²: {train_r2:.4f} ({elapsed:.2f}s)")
@@ -194,7 +198,7 @@ def run_model_comparison(random_seeds=None, show_inline=False):
     results_df = pd.concat(all_results, ignore_index=True)
     
     # Aggregate results across seeds
-    agg_results = results_df.groupby(['model_id', 'algorithm', 'features']).agg({
+    agg_results = results_df.groupby(['dataset', 'model_id', 'algorithm', 'features']).agg({
         'test_r2': ['mean', 'std'],
         'train_r2': ['mean', 'std']
     }).reset_index()
@@ -237,39 +241,48 @@ def create_performance_plots(results_df, show_inline=False):
     output_dir = Path(__file__).resolve().parents[1] / 'outputs' / 'paper_plots'
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create and save test performance plot
-    fig, ax = plt.subplots(figsize=(14, 8))
-    create_single_performance_plot(
-        results_df,
-        ax,
-        ordered_model_ids,
-        metric='test_r2_mean',
-        err_metric='test_r2_std',
-        title='',
-        ylabel='Test $R^2$'
-    )
-    plt.tight_layout()
-    plt.savefig(output_dir / 'model_comparison_test.pdf', bbox_inches='tight')
-    if show_inline and display:
-        display(fig)
-    plt.close(fig)
-    
-    # Create and save training performance plot
-    fig, ax = plt.subplots(figsize=(14, 8))
-    create_single_performance_plot(
-        results_df,
-        ax,
-        ordered_model_ids,
-        metric='train_r2_mean',
-        err_metric='train_r2_std',
-        title='',
-        ylabel='Train $R^2$'
-    )
-    plt.tight_layout()
-    plt.savefig(output_dir / 'model_comparison_train.pdf', bbox_inches='tight')
-    if show_inline and display:
-        display(fig)
-    plt.close(fig)
+    def slug(label: str) -> str:
+        return label.replace(' ', '_').replace('→', 'to').replace('/', '-')
+
+    for dataset_label in results_df['dataset'].unique():
+        subset = results_df[results_df['dataset'] == dataset_label]
+        suffix = slug(dataset_label)
+
+        # Create and save test performance plot
+        fig, ax = plt.subplots(figsize=(14, 8))
+        create_single_performance_plot(
+            subset,
+            ax,
+            ordered_model_ids,
+            metric='test_r2_mean',
+            err_metric='test_r2_std',
+            title='',
+            ylabel=f'Test $R^2$ ({dataset_label})'
+        )
+        plt.tight_layout()
+        plt.savefig(output_dir / f'model_comparison_test_{suffix}.pdf', bbox_inches='tight')
+        if show_inline and display:
+            display(fig)
+        plt.close(fig)
+        
+        """
+        # No need to save the train one really...
+        # Create and save training performance plot
+        fig, ax = plt.subplots(figsize=(14, 8))
+        create_single_performance_plot(
+            subset,
+            ax,
+            ordered_model_ids,
+            metric='train_r2_mean',
+            err_metric='train_r2_std',
+            title='',
+            ylabel=f'Train $R^2$ ({dataset_label})'
+        )
+        plt.tight_layout()
+        plt.savefig(output_dir / f'model_comparison_train_{suffix}.pdf', bbox_inches='tight')
+        if show_inline and display:
+            display(fig)
+        plt.close(fig)"""
     
     print("Created separate test and training performance plots")
 
@@ -365,6 +378,6 @@ def create_single_performance_plot(results_df, ax, ordered_model_ids, metric, er
 
     ax.set_ylim(0.69, 0.86)
     #     ax.set_ylim(0.68, 0.87)
-    yticks = [0.7, 0.75, 0.8, 0.85]
+    yticks = [0.6,0.65, 0.7, 0.75, 0.8, 0.85]
     ax.set_yticks(yticks)
     ax.set_yticklabels([f"{y:.2f}" for y in yticks])

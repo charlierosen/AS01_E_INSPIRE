@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -79,7 +80,7 @@ def perform_cv_classification(df, FEATURES, threshold, MODEL_PARAMS, n_splits=5)
     return cv_results
 
 
-def run_classification_analysis(thresholds, features=None):
+def run_classification_analysis(thresholds, features=None, dataset_mode='mixed', dataset_label=None):
 
     # Nice display names for features
     feature_display_names = {
@@ -106,7 +107,9 @@ def run_classification_analysis(thresholds, features=None):
 
     # Prepare data - only need train_df
     columns = ['vdisp', 'tau', 'MgFe', 'met_err', 'lin_age_err', 'met', 'rad_kpc', 'logM', 'DoR']
-    train_df, _ = prepare_data(columns)
+    mix_datasets = dataset_mode != 'domain_shift'
+    label = dataset_label or ('Mixed' if mix_datasets else 'E-INSPIRE→INSPIRE')
+    train_df, _ = prepare_data(columns, mix_datasets=mix_datasets)
 
     # Initialize results containers
     cv_results_all = []
@@ -114,7 +117,7 @@ def run_classification_analysis(thresholds, features=None):
 
     # Run analysis for each threshold
     for threshold in thresholds:
-        print(f"Running classification analysis for threshold: {threshold}")
+        print(f"Running classification analysis for threshold: {threshold} [{label}]")
 
         # Run cross-validation
         cv_result = perform_cv_classification(
@@ -123,13 +126,14 @@ def run_classification_analysis(thresholds, features=None):
             threshold,
             MODEL_PARAMS
         )
+        cv_result['dataset'] = label
         cv_results_all.append(cv_result)
 
         # Store feature importances for this threshold
         feature_importance_by_threshold[threshold] = cv_result['feature_importances']
 
         # Print basic metrics
-        print(f"Threshold: {threshold}")
+        print(f"Threshold: {threshold} [{label}]")
         print(f"Class Distribution: {cv_result['class_distribution']['percent_high']:.1f}% high, "
               f"{cv_result['class_distribution']['percent_low']:.1f}% low")
         print(f"CV Accuracy: {cv_result['accuracy']:.4f}")
@@ -139,9 +143,9 @@ def run_classification_analysis(thresholds, features=None):
     # Convert results to DataFrame for easier analysis
     cv_results_df = pd.DataFrame(cv_results_all)
 
-    # Create plots
-    plot_classification_metrics(cv_results_df)
-    plot_feature_importance_trends(feature_importance_by_threshold, feature_display_names)
+    # Create plots (saved with dataset-specific names)
+    plot_classification_metrics(cv_results_df, label=label)
+    plot_feature_importance_trends(feature_importance_by_threshold, feature_display_names, label=label)
 
     # Save results as CSV
     # cv_results_df.to_csv('classification_results/classification_metrics.csv', index=False)
@@ -149,7 +153,7 @@ def run_classification_analysis(thresholds, features=None):
     return cv_results_all
 
 
-def plot_classification_metrics(cv_results_df):
+def plot_classification_metrics(cv_results_df, label=None, output_dir='outputs/paper_plots'):
     """
     Plot metrics for the classification analysis
     """
@@ -200,11 +204,17 @@ def plot_classification_metrics(cv_results_df):
     ax2.set_ylim(0, 100)
 
     plt.tight_layout()
-    #plt.savefig('outputs/paper_plots/classification_metrics.pdf', bbox_inches='tight')
-    plt.close()
+
+    """# Save with dataset-aware name
+    os.makedirs(output_dir, exist_ok=True)
+    suffix = 'classification_metrics'
+    if label:
+        suffix += '_' + label.replace(' ', '_').replace('→', 'to')
+    plt.savefig(os.path.join(output_dir, f'{suffix}.pdf'), bbox_inches='tight')
+    plt.close()"""
 
 
-def plot_feature_importance_trends(feature_importance_by_threshold, feature_display_names):
+def plot_feature_importance_trends(feature_importance_by_threshold, feature_display_names, label=None, output_dir='outputs/paper_plots'):
     """
     Plot how feature importance changes with different classification thresholds
     """
@@ -256,5 +266,9 @@ def plot_feature_importance_trends(feature_importance_by_threshold, feature_disp
     plt.xticks(sorted(importance_df['Threshold'].unique()))
     plt.tight_layout()
 
-    plt.savefig('outputs/paper_plots/classification_features.pdf', bbox_inches='tight')
+    os.makedirs(output_dir, exist_ok=True)
+    suffix = 'classification_features'
+    if label:
+        suffix += '_' + label.replace(' ', '_').replace('→', 'to')
+    plt.savefig(os.path.join(output_dir, f'{suffix}.pdf'), bbox_inches='tight')
     plt.close()
