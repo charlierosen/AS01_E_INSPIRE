@@ -234,7 +234,7 @@ def create_performance_plots(results_df, show_inline=False):
         key=lambda x: results_df[results_df['model_id'] == x]['features'].iloc[0]
     )
     
-    output_dir = Path(__file__).resolve().parents[1] / 'outputs' / 'tests'
+    output_dir = Path(__file__).resolve().parents[1] / 'outputs' / 'paper_plots'
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Create and save test performance plot

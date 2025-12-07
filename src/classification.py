@@ -200,7 +200,7 @@ def plot_classification_metrics(cv_results_df):
     ax2.set_ylim(0, 100)
 
     plt.tight_layout()
-    #plt.savefig('outputs/tests/classification_metrics.pdf', bbox_inches='tight')
+    #plt.savefig('outputs/paper_plots/classification_metrics.pdf', bbox_inches='tight')
     plt.close()
 
 
@@ -256,5 +256,5 @@ def plot_feature_importance_trends(feature_importance_by_threshold, feature_disp
     plt.xticks(sorted(importance_df['Threshold'].unique()))
     plt.tight_layout()
 
-    plt.savefig('outputs/tests/classification_features.pdf', bbox_inches='tight')
+    plt.savefig('outputs/paper_plots/classification_features.pdf', bbox_inches='tight')
     plt.close()

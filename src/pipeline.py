@@ -19,7 +19,7 @@ FEATURE_SETS = [
 ]
 
 
-def reset_output_dir(path='outputs/tests'):
+def reset_output_dir(path='outputs/paper_plots'):
     if os.path.isdir(path):
         shutil.rmtree(path)
     os.makedirs(path, exist_ok=True)
@@ -56,7 +56,8 @@ def plot_feature_histograms(train_df, test_df):
         "font.size": 20,
     })
 
-    columns = ['Source', 'logM', 'vdisp', 'tau', 'lin_age_err', 'met', 'met_err', 'DoR']
+    # columns = ['Source', 'logM', 'vdisp', 'tau', 'lin_age_err', 'met', 'met_err', 'DoR']
+    columns = ['rad_kpc', 'logM', 'vdisp', 'tau', 'lin_age_err', 'met', 'met_err', 'DoR']
     feature_names = {
         'met': r'$\mathrm{[M/H]}$',
         'tau': r'$\mathrm{\tau_{\rm rel}}$',
@@ -88,24 +89,37 @@ def plot_feature_histograms(train_df, test_df):
         min_val = min(train_df[feature].min(), test_df[feature].min())
         max_val = max(train_df[feature].max(), test_df[feature].max())
         num_bins = 20
-        if feature in ['vdisp']:
-            bins = np.linspace(min_val, max_val, num_bins)
-            sns.histplot(train_df[feature], bins=bins, color='blue', alpha=0.6, label='Train (E-INSPIRE)', ax=ax, stat='density')
-            sns.histplot(test_df[feature], bins=bins, color='red', alpha=0.6, label='Test (INSPIRE)', ax=ax, stat='density')
-        elif feature == 'rad_kpc':
-            bins = np.linspace(min_val, max_val, 20)
-            sns.histplot(train_df[feature], bins=bins, color='blue', alpha=0.6, label='Train (E-INSPIRE)', ax=ax, stat='density')
-            sns.histplot(test_df[feature], bins=bins, color='red', alpha=0.6, label='Test (INSPIRE)', ax=ax, stat='density')
+
+        if feature == 'Source':
+            bins = [-0.5, 0.5, 1.5]
         else:
-            sns.kdeplot(train_df[feature], color='blue', label='Train (E-INSPIRE)', ax=ax)
-            sns.kdeplot(test_df[feature], color='red', label='Test (INSPIRE)', ax=ax)
+            bins = np.linspace(min_val, max_val, num_bins)
+
+        sns.histplot(
+            train_df[feature],
+            bins=bins,
+            color='blue',
+            alpha=0.6,
+            label='E-INSPIRE',
+            ax=ax,
+            stat='density',
+        )
+        sns.histplot(
+            test_df[feature],
+            bins=bins,
+            color='orange',
+            alpha=0.6,
+            label='INSPIRE',
+            ax=ax,
+            stat='density',
+        )
 
         ax.set_xlabel(get_display_name(feature))
         ax.set_ylabel('Density')
         ax.set_xlim(min_val, max_val)
         ax.legend()
     plt.tight_layout()
-    plt.savefig('outputs/tests/train_test_histo.pdf')
+    plt.savefig('outputs/paper_plots/train_test_histo.pdf')
     plt.close()
 
 
