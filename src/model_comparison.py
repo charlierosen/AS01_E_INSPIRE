@@ -79,7 +79,9 @@ def run_model_comparison(random_seeds=None, show_inline=False, dataset_mode='mix
     # Prepare the data
     columns = ['vdisp','tau','MgFe', 'met_err', 'lin_age_err','met','rad_kpc','logM','DoR']
     mix_datasets = dataset_mode != 'domain_shift'
-    label = dataset_label or ('Mixed' if mix_datasets else 'E-INSPIRE→INSPIRE')
+    mix_datasets = False
+
+    label = dataset_label or ('Mixed' if mix_datasets else 'E-INSPIRE->INSPIRE')
     train_df, test_df = prepare_data(columns, mix_datasets=mix_datasets)
     
     feature_sets = {
