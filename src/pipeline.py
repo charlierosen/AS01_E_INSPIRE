@@ -12,10 +12,12 @@ FEATURE_SETS = [
     ('Stel. pop. with errors', ['met', 'tau', 'met_err', 'lin_age_err']),
     ('Stel. pop. and kinematics', ['met', 'tau', 'met_err', 'lin_age_err', 'vdisp']),
     (r'Stel. pop. and $\alpha$-abundance', ['met', 'tau', 'met_err', 'lin_age_err', 'MgFe']),
-    ('Stel. pop. and structural', ['met', 'tau', 'met_err', 'lin_age_err', 'logM', 'rad_kpc']),
     (r'Stel. pop., $\alpha$-abundance and kinematics', ['met', 'tau', 'met_err', 'lin_age_err', 'MgFe', 'vdisp']),
+    ('Stel. pop. and structural', ['met', 'tau', 'met_err', 'lin_age_err', 'logM', 'rad_kpc']),
     ('Stel. pop., structural and kinematics', ['met', 'tau', 'met_err', 'lin_age_err', 'logM', 'rad_kpc', 'vdisp']),
     ('Complete Set', ['met', 'tau', 'met_err', 'lin_age_err', 'logM', 'rad_kpc', 'MgFe', 'vdisp']),
+    # ('New Chiara 1', ['logM', 'rad_kpc', 'vdisp']),
+    # ('New Chiara 2', ['tau', 'logM', 'rad_kpc', 'vdisp', 'lin_age_err'])
 ]
 
 
@@ -28,13 +30,12 @@ def reset_output_dir(path='outputs/paper_plots'):
 def run_baseline_regressions(train_df, test_df, random_states, plotting=False, tag=None):
     for random_state in random_states:
         model_params = {
-            'max_depth': 8,
-            'max_features': 0.8,
-            'max_samples': 0.7,
-            'min_samples_leaf': 3,
-            'min_samples_split': 5,
-            'n_estimators': 50,
-            'random_state': random_state,
+            'C': 5.0,
+            'epsilon': 0.03,
+            'kernel': 'poly',
+            'gamma': 0.01,
+            'degree': 3,
+            'coef0': 0.5,
         }
         for name, features in FEATURE_SETS:
             labeled_name = f"{name} [{tag}]" if tag else name
@@ -60,13 +61,13 @@ def plot_feature_histograms(train_df, test_df, tag=None):
     # columns = ['Source', 'logM', 'vdisp', 'tau', 'lin_age_err', 'met', 'met_err', 'DoR']
     columns = ['rad_kpc', 'logM', 'vdisp', 'tau', 'lin_age_err', 'met', 'met_err', 'DoR']
     feature_names = {
-        'met': r'$\mathrm{[M/H]}$',
-        'tau': r'$\mathrm{\tau_{\rm rel}}$',
-        'met_err': r'$\Delta{\mathrm{[M/H]}}$',
-        'lin_age_err': r'$\Delta{\mathrm{Age}}$',
-        'logM': r'$\log(M/M_{\odot})$',
-        'rad_kpc': r'$R \, \mathrm{(kpc)}$',
-        'MgFe': r'$\mathrm{[Mg/Fe]}$',
+        'met': r'$\mathrm{[M/H] \, (dex)}$',
+        'tau': r'$\tau_{\rm rel}$',
+        'met_err': r'$\Delta\mathrm{[M/H] \, (dex)}$',
+        'lin_age_err': r'$\Delta\mathrm{Age \, (Gyr)}$',
+        'logM': r'$\log(M_{\star}/M_{\odot})$',
+        'rad_kpc': r'$R_{\rm e} \, \mathrm{(kpc)}$',
+        'MgFe': r'$\mathrm{[Mg/Fe] \, (dex)}$',
         'vdisp': r'$\sigma_{\star} \, \mathrm{(km/s)}$',
         'DoR': r'$\mathrm{DoR}$',
         'Source': 'Source',
@@ -85,23 +86,26 @@ def plot_feature_histograms(train_df, test_df, tag=None):
     fig, axes = plt.subplots(2, 4, figsize=(16, 8))
     axes = axes.flatten()
 
-    sns.set_style("whitegrid")
+    sns.set_style("white")
     for i, feature in enumerate(columns):
         if i >= len(axes):
             break
         ax = axes[i]
         ax.xaxis.set_major_locator(plt.MaxNLocator(5))
         ax.yaxis.set_major_locator(plt.MaxNLocator(5))
-        ax.grid(True, linestyle='-', linewidth=0.5, alpha=0.7)
+        ax.tick_params(axis='both', labelsize=14)
 
         min_val = min(train_df[feature].min(), test_df[feature].min())
         max_val = max(train_df[feature].max(), test_df[feature].max())
-        num_bins = 20
+        num_bins = 32
 
         if feature == 'Source':
             bins = [-0.5, 0.5, 1.5]
+            pad = 0
         else:
-            bins = np.linspace(min_val, max_val, num_bins)
+            rng = max_val - min_val
+            bins = np.linspace(min_val, max_val, num_bins + 1)
+            pad = rng * 0.05
 
         sns.histplot(
             train_df[feature],
@@ -110,7 +114,7 @@ def plot_feature_histograms(train_df, test_df, tag=None):
             alpha=0.6,
             label=train_label,
             ax=ax,
-            stat='density',
+            stat='probability',
         )
         sns.histplot(
             test_df[feature],
@@ -119,13 +123,18 @@ def plot_feature_histograms(train_df, test_df, tag=None):
             alpha=0.6,
             label=test_label,
             ax=ax,
-            stat='density',
+            stat='probability',
         )
 
         ax.set_xlabel(get_display_name(feature))
-        ax.set_ylabel('Density')
-        ax.set_xlim(min_val, max_val)
-        ax.legend()
+        if i in (0, 4):
+            ax.set_ylabel(r'$\mathrm{Probability}$')
+        else:
+            ax.set_ylabel('')
+        ax.set_xlim(bins[0] - pad, bins[-1] + pad)
+        if i == 3:
+            ax.legend(loc='upper right', bbox_to_anchor=(1.0, 1.0), framealpha=0.9, fontsize=14)
+    plt.subplots_adjust(wspace=0.3, hspace=0.1)
     plt.tight_layout()
     suffix = ''
     if tag:

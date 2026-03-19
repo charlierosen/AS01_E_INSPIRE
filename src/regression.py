@@ -6,10 +6,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVR
 
 # Global stores mirror the original notebook state
 results_summary = pd.DataFrame(columns=['name', 'features', 'test_r2', 'train_avg_r2', 'feature_importances'])
@@ -39,16 +39,18 @@ def test_regression_on_INSPIRE(name, FEATURES,test_df, train_df,MODEL_PARAMS, pl
     
     # Train the model
     # print("Training the model...")
-    rf_model = RandomForestRegressor(**MODEL_PARAMS)
-    rf_model.fit(X_train_scaled, y_train)
+    params = dict(MODEL_PARAMS)
+    params.pop('random_state', None)
+    model = SVR(**params)
+    model.fit(X_train_scaled, y_train)
     
-        # Get feature importances and store as dictionary
-    feature_importance_dict = dict(zip(FEATURES, rf_model.feature_importances_))
+    # SVR does not expose feature importances
+    feature_importance_dict = None
     
     
     # Make predictions on test data
     # print("Making predictions on test data...")
-    y_pred = rf_model.predict(X_test_scaled)
+    y_pred = model.predict(X_test_scaled)
 
     if name not in test_predictions:
         test_predictions[name] = {}
@@ -191,11 +193,20 @@ def test_regression_on_INSPIRE(name, FEATURES,test_df, train_df,MODEL_PARAMS, pl
         'random_seed': [random_state]  # Add random_state to track different runs
     })], ignore_index=True)
     
-    visualize_kfold_predictions_training(train_df, FEATURES, name, model_params=MODEL_PARAMS, plotting=plotting)
+    visualize_kfold_predictions_training(
+        train_df,
+        FEATURES,
+        name,
+        model_params=MODEL_PARAMS,
+        plotting=plotting,
+        random_state=random_state,
+    )
 
 
 def visualize_kfold_predictions_training(df, features, name, target='DoR', n_splits=5, model_params=None, 
-                                 small_boundary=0.35, large_boundary=0.6, plotting=False):
+                                 small_boundary=0.35, large_boundary=0.6, plotting=False, random_state=None):
+    if model_params is None:
+        model_params = {}
     # print(model_params)
     plt.rcParams.update({
         "text.usetex": True,
@@ -208,7 +219,8 @@ def visualize_kfold_predictions_training(df, features, name, target='DoR', n_spl
     y = df[target]
     
     # Set up K-Fold cross-validation
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=model_params['random_state'])
+    seed = random_state if random_state is not None else model_params.get('random_state', 42)
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=seed)
     
     # Initialize arrays to store all predictions
     all_true = np.zeros_like(y)
@@ -236,9 +248,11 @@ def visualize_kfold_predictions_training(df, features, name, target='DoR', n_spl
         X_test_scaled = scaler.transform(X_test)
         
         # Train model and make predictions
-        rf_model = RandomForestRegressor(**model_params)
-        rf_model.fit(X_train_scaled, y_train)
-        y_pred = rf_model.predict(X_test_scaled)
+        params = dict(model_params)
+        params.pop('random_state', None)
+        model = SVR(**params)
+        model.fit(X_train_scaled, y_train)
+        y_pred = model.predict(X_test_scaled)
         
         if name not in train_predictions:
             train_predictions[name] = {}
@@ -246,7 +260,7 @@ def visualize_kfold_predictions_training(df, features, name, target='DoR', n_spl
         for idx, pred_val in zip(actual_indices, y_pred):
             if idx not in train_predictions[name]:
                 train_predictions[name][idx] = {}
-            train_predictions[name][idx][model_params['random_state']] = pred_val
+            train_predictions[name][idx][seed] = pred_val
         
         # Store results for this fold
         r2 = r2_score(y_test, y_pred)
@@ -268,7 +282,7 @@ def visualize_kfold_predictions_training(df, features, name, target='DoR', n_spl
     mean_fold_r2 = np.mean(fold_results['r2_scores'])
     std_fold_r2 = np.std(fold_results['r2_scores'])
     
-    mask = (results_summary['name'] == name) & (results_summary['random_seed'] == model_params['random_state'])
+    mask = (results_summary['name'] == name) & (results_summary['random_seed'] == seed)
     results_summary.loc[mask, 'train_avg_r2'] = mean_fold_r2
     
     # Calculate overall RMSE and MAE
@@ -555,7 +569,6 @@ def visualize_ensemble_predictions_combined_residuals_DO_NOT_USE(model_name):
             ax.set_ylabel('')  # Remove label for test (right side)
         
         # ax.set_xlabel('Predicted DoR', fontsize=20)
-        ax.grid(True, alpha=0.3)
         ax.tick_params(axis='both', which='both', direction='in', labelsize=12)
         ax.minorticks_on()
         
@@ -630,7 +643,7 @@ def visualize_ensemble_predictions_combined_residuals_DO_NOT_USE(model_name):
 
 
 def visualize_ensemble_predictions_combined(model_name, train_df_override=None, test_df_override=None):
-    
+
     top = 0.9
     bottom = 0
     
@@ -673,10 +686,14 @@ def visualize_ensemble_predictions_combined(model_name, train_df_override=None, 
         {"name": "test", "ax": ax_test, "predictions": test_predictions, 
          "df": test_df_local, "id_field": "ID"}
     ]
-    
+
     all_snr_values = []  # Collect all SNR values for shared colorbar
     scatter_artists = []  # Save scatter artists for colorbar
-    
+
+    # Compute global SNR range for consistent colormap
+    snr_min = min(train_df_local['SNR'].min(), test_df_local['SNR'].min())
+    snr_max = max(train_df_local['SNR'].max(), test_df_local['SNR'].max())
+
     for dataset in datasets:
         # Get data points
         predictions_dict = dataset["predictions"]
@@ -726,8 +743,8 @@ def visualize_ensemble_predictions_combined(model_name, train_df_override=None, 
         y_pred_avg = y_pred_avg[valid_indices]
         y_pred_std = y_pred_std[valid_indices]
         snr_values = snr_values[valid_indices]
-        
-        # Calculate RMSE only (R² comes from results_summary)
+
+# Calculate RMSE only (R² comes from results_summary)
         rmse = np.sqrt(mean_squared_error(y_true, y_pred_avg))
         # Round RMSE to 2 decimal places
         rmse = round(rmse, 3)
@@ -737,18 +754,12 @@ def visualize_ensemble_predictions_combined(model_name, train_df_override=None, 
         
         # Plot True vs Predicted with SNR coloring
         ax = dataset["ax"]
-        
-        low = 20
-        high = 70
-        snr_categories = np.zeros_like(snr_values, dtype=int)
-        snr_categories[(snr_values >= low) & (snr_values < high)] = 1  # Medium SNR
-        snr_categories[snr_values >= high] = 2  # High SNR
-        
-        category_colors = ['#d53e4f', '#fee08b','#3288bd']  # Blue, Yellow, Red for Low, Medium, High
-        point_colors = [category_colors[cat] for cat in snr_categories]
-        
-        # Create scatter plot
-        scatter = ax.scatter(y_pred_avg, y_true, c=point_colors, s=50, alpha=0.7, edgecolors='none')
+
+        # Create scatter plot with continuous SNR colormap (log scale)
+        from matplotlib.colors import LogNorm
+        scatter = ax.scatter(y_pred_avg, y_true, c=snr_values, cmap='viridis_r',
+                            s=80, alpha=0.7, edgecolors='none',
+                            norm=LogNorm(vmin=max(snr_min, 1), vmax=snr_max))
         scatter_artists.append(scatter)
         
         # Draw error bars using errorbar function with no markers
@@ -757,24 +768,24 @@ def visualize_ensemble_predictions_combined(model_name, train_df_override=None, 
         
         ax.set_xlim(bottom, top)
         ax.set_ylim(bottom, top)
-        
+
         # Create consistent tick marks with 0.1 increments
         ticks = np.arange(0.1, 1, 0.2)
         ax.set_xticks(ticks)
         ax.set_yticks(ticks)
         ax.set_xticklabels([f'{t:.1f}' for t in ticks])
         ax.set_yticklabels([f'{t:.1f}' for t in ticks])
-        
+
         # Add perfect prediction line
-        ax.plot([0.0, 1], [0.0, 1], 'r--', 
+        ax.plot([0.0, 1], [0.0, 1], 'r--',
                label='Perfect prediction', linewidth=1.5)
-        
+
         # Add annotations
         props = dict(boxstyle='square', facecolor='white', alpha=0.8, edgecolor='lightgray')
-            
+
         textstr = '\n'.join((
                 r'$\mathrm{%s}$' % (dataset["name"].capitalize(),),
-                r'$\mathrm{R}^2 = %.3f$' % (r2,),  
+                r'$\mathrm{R}^2 = %.3f$' % (r2,),
                 r'$\mathrm{RMSE} = %.3f$' % (rmse,),
             ))
 
@@ -792,26 +803,156 @@ def visualize_ensemble_predictions_combined(model_name, train_df_override=None, 
             ax.set_xticklabels([])
             plt.setp(ax.get_xticklabels(), visible=False)
         
-        ax.grid(True, alpha=0.3)
         ax.tick_params(axis='both', which='both', direction='in', labelsize=12)
         ax.minorticks_on()
     
-    # Add a legend for SNR categories at the bottom of the figure
-    from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor=category_colors[0], edgecolor='none', alpha=0.7, label=r'$\mathrm{SNR} < 20$'),
-        Patch(facecolor=category_colors[1], edgecolor='none', alpha=0.7, label=r'$20 \leq \mathrm{SNR} < 70$'),
-        Patch(facecolor=category_colors[2], edgecolor='none', alpha=0.7, label=r'$\mathrm{SNR} \geq 70$')
-    ]
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.08),
-          ncol=3, frameon=True, fontsize=20, title='SNR Categories')
+    # Add a colorbar for SNR values
+    if scatter_artists:
+        cbar = fig.colorbar(scatter_artists[-1], ax=[ax_train, ax_test], orientation='horizontal',
+                           fraction=0.05, pad=0.05, aspect=30)
+        cbar.set_label(r'$\mathrm{SNR}$', fontsize=20)
+        cbar.ax.tick_params(labelsize=14)
+        from matplotlib.ticker import FixedLocator, FixedFormatter
+        cbar.ax.xaxis.set_major_locator(FixedLocator([10, 20, 30, 40, 50, 60, 70, 80]))
+        cbar.ax.xaxis.set_major_formatter(FixedFormatter(['10', '20', '30', '40', '50', '60', '70', '80']))
+        cbar.ax.xaxis.set_minor_locator(FixedLocator([]))
     
-
-    if model_name.startswith("Stel. pop. and structural"):
+    plot_models = ['New Chiara 1', 'New Chiara 2', 'Stel. pop. and structural']
+    if any(p in model_name for p in plot_models):
         safe_name = model_name.replace(" ", "_").replace("→", "to")
         plt.savefig(f'outputs/paper_plots/{safe_name}_combined_ensemble.pdf', bbox_inches='tight')
         plt.close()
     
+    return True
+
+
+def visualize_best_worst_comparison(best_model_name, worst_model_name, train_df_override=None, test_df_override=None):
+    """2x2 grid: columns = best / worst model, rows = train / test."""
+
+    top = 0.9
+    bottom = 0
+
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "Computer Modern",
+        "figure.dpi": 300,
+        "font.size": 26,
+    })
+
+    train_df_local = train_df_override if train_df_override is not None else train_df
+    test_df_local  = test_df_override  if test_df_override  is not None else test_df
+
+    snr_min = min(train_df_local['SNR'].min(), test_df_local['SNR'].min())
+    snr_max = max(train_df_local['SNR'].max(), test_df_local['SNR'].max())
+
+    from matplotlib.colors import LogNorm
+    norm = LogNorm(vmin=max(snr_min, 1), vmax=snr_max)
+
+    fig, axes = plt.subplots(2, 2, figsize=(20, 18))
+    fig.subplots_adjust(hspace=0.1, wspace=0.1)
+
+    # axes layout: [row, col]  row0=train, row1=test  col0=worst, col1=best
+    model_axes = {
+        worst_model_name: (axes[0, 0], axes[1, 0]),
+        best_model_name:  (axes[0, 1], axes[1, 1]),
+    }
+
+    scatter_artists = []
+
+    def get_data(model_name, predictions_dict, df, id_field):
+        data_points = list(predictions_dict[model_name].keys())
+        if id_field is not None:
+            point_to_true = {v: df.loc[df[id_field] == v, 'DoR'].values[0] for v in data_points}
+            point_to_snr  = {v: df.loc[df[id_field] == v, 'SNR'].values[0]  for v in data_points}
+        else:
+            point_to_true = {idx: df.loc[idx, 'DoR'] for idx in data_points}
+            point_to_snr  = {idx: df.loc[idx, 'SNR']  for idx in data_points}
+
+        y_true, y_pred_avg, y_pred_std, snr_vals = [], [], [], []
+        for v in data_points:
+            preds = list(predictions_dict[model_name][v].values())
+            if preds and v in point_to_true and v in point_to_snr:
+                y_true.append(point_to_true[v])
+                y_pred_avg.append(np.mean(preds))
+                y_pred_std.append(np.std(preds))
+                snr_vals.append(point_to_snr[v])
+
+        y_true     = np.array(y_true)
+        y_pred_avg = np.array(y_pred_avg)
+        y_pred_std = np.array(y_pred_std)
+        snr_vals   = np.array(snr_vals)
+
+        valid = ~np.isnan(y_pred_avg) & ~np.isnan(snr_vals)
+        return y_true[valid], y_pred_avg[valid], y_pred_std[valid], snr_vals[valid]
+
+    for model_name, (ax_train, ax_test) in model_axes.items():
+        model_results = results_summary[results_summary['name'] == model_name]
+        test_r2_value  = round(model_results['test_r2'].mean(), 3)
+        train_r2_value = round(model_results['train_avg_r2'].mean(), 3)
+
+        panel_datasets = [
+            ("train", ax_train, train_predictions, train_df_local, None,  train_r2_value),
+            ("test",  ax_test,  test_predictions,  test_df_local,  "ID",  test_r2_value),
+        ]
+
+        for split, ax, preds_dict, df, id_field, r2 in panel_datasets:
+            y_true, y_pred_avg, y_pred_std, snr_vals = get_data(model_name, preds_dict, df, id_field)
+
+            rmse = round(np.sqrt(mean_squared_error(y_true, y_pred_avg)), 3)
+
+            sc = ax.scatter(y_true, y_pred_avg, c=snr_vals, cmap='viridis_r',
+                            s=80, alpha=0.7, edgecolors='none', norm=norm)
+            scatter_artists.append(sc)
+
+            ax.errorbar(y_true, y_pred_avg, yerr=y_pred_std, fmt='none',
+                        ecolor='#000000', elinewidth=0.2, capsize=0)
+
+            ax.set_xlim(bottom, top)
+            ax.set_ylim(bottom, top)
+
+            ticks = np.arange(0.1, 1, 0.2)
+            ax.set_xticks(ticks)
+            ax.set_yticks(ticks)
+
+            ax.plot([0.0, 1], [0.0, 1], 'r--', linewidth=1.5)
+
+            split_label = 'Training' if split == 'train' else 'Test'
+            props = dict(boxstyle='square', facecolor='white', alpha=0.8, edgecolor='lightgray')
+            textstr = '\n'.join((
+                split_label,
+                r'$\mathrm{R}^2 = %.3f$' % r2,
+                r'$\mathrm{RMSE} = %.3f$' % rmse,
+            ))
+            ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=22,
+                    verticalalignment='top', bbox=props)
+
+            ax.tick_params(axis='both', which='both', direction='in', labelsize=22)
+            ax.minorticks_on()
+
+            # hide tick labels on interior edges
+            if split == "train":
+                plt.setp(ax.get_xticklabels(), visible=False)
+            if model_name == best_model_name:
+                plt.setp(ax.get_yticklabels(), visible=False)
+
+    # Axis labels — x only on bottom row, y only on left column
+    axes[1, 0].set_xlabel(r'True DoR', fontsize=26)
+    axes[1, 1].set_xlabel(r'True DoR', fontsize=26)
+    axes[0, 0].set_ylabel(r'Predicted DoR', fontsize=26)
+    axes[1, 0].set_ylabel(r'Predicted DoR', fontsize=26)
+
+    if scatter_artists:
+        from matplotlib.ticker import FixedLocator, FixedFormatter
+        cbar = fig.colorbar(scatter_artists[-1], ax=axes,
+                            orientation='horizontal', fraction=0.03, pad=0.08, aspect=60)
+        cbar.set_label(r'$\mathrm{SNR}$', fontsize=26)
+        cbar.ax.tick_params(labelsize=22)
+        cbar.ax.xaxis.set_major_locator(FixedLocator([10, 20, 30, 40, 50, 60, 70, 80]))
+        cbar.ax.xaxis.set_major_formatter(FixedFormatter(['10', '20', '30', '40', '50', '60', '70', '80']))
+        cbar.ax.xaxis.set_minor_locator(FixedLocator([]))
+
+    plt.savefig('outputs/paper_plots/best_worst_comparison.pdf', bbox_inches='tight')
+    plt.close()
     return True
 
 
@@ -883,6 +1024,14 @@ def calculate_ensemble_metrics(targetName=None, dataset_frames=None, filter_tags
             'train_r2_std': [train_std_rounded]
         })], ignore_index=True)
     
+    # Plot best vs worst comparison
+    if len(ensemble_results) >= 2:
+        best_name  = ensemble_results.loc[ensemble_results['test_r2_avg'].idxmax(), 'name']
+        worst_name = ensemble_results.loc[ensemble_results['test_r2_avg'].idxmin(), 'name']
+        tag = extract_tag(best_name)
+        train_override, test_override = (dataset_frames[tag] if dataset_frames and tag in dataset_frames else (None, None))
+        visualize_best_worst_comparison(best_name, worst_name, train_override, test_override)
+
     # Print results
     print("\nR² Variation Metrics Across Random Seeds:")
     print("=" * 120)
@@ -897,10 +1046,11 @@ def calculate_ensemble_metrics(targetName=None, dataset_frames=None, filter_tags
     return ensemble_results
 
 
-def round_to_sig_figs(num, sig_figs=1):
-    if num == 0:
-        return 0, 0
-    
+def round_to_sig_figs(num, sig_figs=1, default_decimals=3):
+    # Handle zero or near-zero values (e.g., floating point noise like 1e-16)
+    if num == 0 or abs(num) < 1e-10:
+        return 0, default_decimals
+
     # Find the position of the first significant digit
     pos = int(np.floor(np.log10(abs(num))))
     
@@ -1156,7 +1306,6 @@ def plot_features_with_target(df, features, feature_display_names, target='DoR',
                 if i < n_vars - 1:
                     ax.set_xticklabels([])
                 
-                ax.grid(True, alpha=0.3)
             
             elif i > j:  # Lower triangle: scatter plots
                 scatter = ax.scatter(df[all_vars[j]], df[all_vars[i]], 
@@ -1164,7 +1313,6 @@ def plot_features_with_target(df, features, feature_display_names, target='DoR',
                                     edgecolors='k', linewidths=0.5)
                 
                 # Add grid
-                ax.grid(True, alpha=0.3)
                 
                 # Set axis labels only for the bottom row and leftmost column
                 # Use display names for labels
@@ -1295,7 +1443,6 @@ def plot_features_colored_by_target(df, features, feature_display_names, target=
                 if i < n_vars - 1:
                     ax.set_xticklabels([])
                 
-                ax.grid(True, alpha=0.3)
             
             elif i > j:  # Lower triangle: scatter plots colored by target
                 scatter = ax.scatter(df[features[j]], df[features[i]], 
@@ -1303,7 +1450,6 @@ def plot_features_colored_by_target(df, features, feature_display_names, target=
                                     s=30, alpha=0.7, linewidths=0.5)
                 
                 # Add grid
-                ax.grid(True, alpha=0.3)
                 
                 # Set axis labels only for the bottom row and leftmost column
                 # Use display names for labels
@@ -1386,26 +1532,28 @@ def plot_features_by_dataset(train_df, test_df, features, feature_display_names=
     # Map the feature indices for our compact layout
     # We're using a n_vars-1 x n_vars-1 grid now
     plot_count = 0
+    left_col_axes = []
     for i in range(1, n_vars):  # Start from 1 to skip first diagonal element
         for j in range(i):      # Only lower triangle
             # Calculate row and column for our compact grid
-            row = i - 1  # Adjusted for 0-indexing 
+            row = i - 1  # Adjusted for 0-indexing
             col = j
-            
+
             # Create subplot at specific position
             ax = fig.add_subplot(gs[row, col])
             plot_count += 1
+            if j == 0:
+                left_col_axes.append(ax)
             
             # Plot scatter for both datasets
             for dataset, color in dataset_colors.items():
                 subset = combined_df[combined_df['dataset'] == dataset]
-                ax.scatter(subset[features[j]], subset[features[i]], 
-                          c=color, label=dataset, 
-                          s=30, alpha=0.6, 
+                ax.scatter(subset[features[j]], subset[features[i]],
+                          c=color, label=dataset,
+                          s=30, alpha=0.8,
                           edgecolors='k', linewidths=0.5)
             
             # Add grid
-            ax.grid(True, alpha=0.3)
             
             # Set axis labels only for the bottom row and leftmost column
             if i == n_vars - 1:  # Bottom row (last feature)
@@ -1448,6 +1596,7 @@ def plot_features_by_dataset(train_df, test_df, features, feature_display_names=
     # Tighten layout
     plt.tight_layout()
     fig.subplots_adjust(wspace=0.1, hspace=0.1)
+    fig.align_ylabels(left_col_axes)
     
     plt.savefig('outputs/paper_plots/combined_corner.pdf')
     #plt.savefig('outputs/paper_plots/combined_corner.png')
@@ -1458,13 +1607,12 @@ def plot_features_by_dataset(train_df, test_df, features, feature_display_names=
 def perform_residual_analysis(train_df, test_df, features, target='DoR', model_params=None):
     if model_params is None:
         model_params = {
-            'max_depth': 13,
-            'max_features': 0.8,
-            'max_samples': 0.7,
-            'min_samples_leaf': 3,
-            'min_samples_split': 5,
-            'n_estimators': 60,
-            'random_state': 42
+            'C': 5.0,
+            'epsilon': 0.03,
+            'kernel': 'poly',
+            'gamma': 0.01,
+            'degree': 3,
+            'coef0': 0.5,
         }
     
     # Extract features and target
@@ -1479,13 +1627,15 @@ def perform_residual_analysis(train_df, test_df, features, target='DoR', model_p
     X_test_scaled = scaler.transform(X_test)
     
     # Train the model
-    print("Training random forest model...")
-    rf_model = RandomForestRegressor(**model_params)
-    rf_model.fit(X_train_scaled, y_train)
+    print("Training SVR model...")
+    params = dict(model_params)
+    params.pop('random_state', None)
+    model = SVR(**params)
+    model.fit(X_train_scaled, y_train)
     
     # Make predictions
-    y_train_pred = rf_model.predict(X_train_scaled)
-    y_test_pred = rf_model.predict(X_test_scaled)
+    y_train_pred = model.predict(X_train_scaled)
+    y_test_pred = model.predict(X_test_scaled)
     
     # Calculate residuals
     train_residuals = y_train - y_train_pred
@@ -1502,12 +1652,12 @@ def perform_residual_analysis(train_df, test_df, features, target='DoR', model_p
     
     # Store results
     results = {
-        'model': rf_model,
+        'model': model,
         'train_predictions': y_train_pred,
         'test_predictions': y_test_pred,
         'train_residuals': train_residuals,
         'test_residuals': test_residuals,
-        'feature_importances': dict(zip(features, rf_model.feature_importances_)),
+        'feature_importances': None,
         'metrics': {
             'train_r2': train_r2,
             'test_r2': test_r2,
@@ -1651,7 +1801,6 @@ def create_feature_residual_grid(test_df, features, results, output_dir='./outpu
         ax.set_xlabel(feature)
         ax.set_ylabel('Residual')
         ax.set_title(f'Residuals vs {feature}')
-        ax.grid(alpha=0.3)
     
     # Hide any extra axes
     for i in range(n_features, len(axes)):

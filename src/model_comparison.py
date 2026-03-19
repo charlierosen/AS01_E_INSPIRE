@@ -89,10 +89,12 @@ def run_model_comparison(random_seeds=None, show_inline=False, dataset_mode='mix
     'Stel. pop. with errors': ['met', 'tau', 'met_err', 'lin_age_err'],
     'Stel. pop. and kinematics': ['met', 'tau', 'met_err', 'lin_age_err', 'vdisp'],
     r'Stel. pop. and $\alpha$-abundance': ['met', 'tau', 'met_err', 'lin_age_err', 'MgFe'],
-    'Stel. pop. and structural': ['met', 'tau', 'met_err', 'lin_age_err', 'logM', 'rad_kpc'],
     r'Stel. pop., $\alpha$-abundance and kinematics': ['met', 'tau', 'met_err', 'lin_age_err', 'MgFe', 'vdisp'],
+    'Stel. pop. and structural': ['met', 'tau', 'met_err', 'lin_age_err', 'logM', 'rad_kpc'],
     'Stel. pop., structural and kinematics': ['met', 'tau', 'met_err', 'lin_age_err', 'logM', 'rad_kpc', 'vdisp'],
-    'Complete Set': ['met', 'tau', 'met_err', 'lin_age_err', 'logM', 'rad_kpc', 'MgFe', 'vdisp']
+    'Complete Set': ['met', 'tau', 'met_err', 'lin_age_err', 'logM', 'rad_kpc', 'MgFe', 'vdisp'],
+    # 'New Chiara 1': ['logM', 'rad_kpc', 'vdisp'],
+    # 'New Chiara 2': ['tau', 'logM', 'rad_kpc', 'vdisp', 'lin_age_err'],
     }
     
     # Define the models to compare
@@ -136,10 +138,12 @@ def run_model_comparison(random_seeds=None, show_inline=False, dataset_mode='mix
         'SVR': {
             'class': SVR,
             'params': {
-                'C': 1.0,
-                'epsilon': 0.1,
-                'kernel': 'rbf',
-                'gamma': 'scale'
+                'C': 5.0,
+                'epsilon': 0.03,
+                'kernel': 'poly',
+                'gamma': 0.01,
+                'degree': 3,
+                'coef0': 0.5,
             },
             'color': 'brown'
         }
@@ -209,12 +213,12 @@ def run_model_comparison(random_seeds=None, show_inline=False, dataset_mode='mix
     agg_results.columns = ['_'.join(col).strip('_') if isinstance(col, tuple) else col for col in agg_results.columns.values]
     
     # Create the plots as separate figures
-    create_performance_plots(agg_results, show_inline=show_inline)
-    
+    create_performance_plots(agg_results, show_inline=show_inline, model_order=list(feature_sets.keys()))
+
     return results_df, agg_results
 
 
-def create_performance_plots(results_df, show_inline=False):
+def create_performance_plots(results_df, show_inline=False, model_order=None):
     """
     Create separate plots for test and training performance
     """
@@ -234,11 +238,11 @@ def create_performance_plots(results_df, show_inline=False):
         "font.size": 30,
     })
     
-    # Get unique model IDs in order of increasing feature count
-    ordered_model_ids = sorted(
-        results_df['model_id'].unique(),
-        key=lambda x: results_df[results_df['model_id'] == x]['features'].iloc[0]
-    )
+    # Use provided order, or fall back to order of appearance in results_df
+    if model_order is not None:
+        ordered_model_ids = [m for m in model_order if m in results_df['model_id'].unique()]
+    else:
+        ordered_model_ids = list(results_df['model_id'].unique())
     
     output_dir = Path(__file__).resolve().parents[1] / 'outputs' / 'paper_plots'
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -259,7 +263,7 @@ def create_performance_plots(results_df, show_inline=False):
             metric='test_r2_mean',
             err_metric='test_r2_std',
             title='',
-            ylabel=f'Test $R^2$ ({dataset_label})'
+            ylabel=r'Test $R^2$'
         )
         plt.tight_layout()
         plt.savefig(output_dir / f'model_comparison_test_{suffix}.pdf', bbox_inches='tight')
@@ -335,13 +339,15 @@ def create_single_performance_plot(results_df, ax, ordered_model_ids, metric, er
         if err_metric:
             err_values = algo_df['err_val'].values
             ax.errorbar(
-                x_values, 
+                x_values,
                 y_values,
                 yerr=err_values,
-                fmt='none', 
+                fmt='none',
                 ecolor=colors.get(algorithm, f'C{i}'),
                 alpha=0.3,
-                capsize=3
+                capsize=3,
+                elinewidth=4,
+                capthick=4,
             )
         
         # Plot the line and points
@@ -370,15 +376,14 @@ def create_single_performance_plot(results_df, ax, ordered_model_ids, metric, er
     ax.set_xticklabels(feature_counts, rotation=0, ha='center', fontsize=26)  # Changed rotation and alignment too
     
     # Add grid and legend
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=30, loc='lower right', ncol=2)
+    ax.legend(fontsize=22, loc='lower right', ncol=2)
     
     # Set y-axis limits to maximize visibility of differences
     min_r2 = max(0, results_df[metric].min() - results_df[err_metric].max() - 0.05) if err_metric else max(0, results_df[metric].min() - 0.05)
     max_r2 = min(1, results_df[metric].max() + results_df[err_metric].max() + 0.05) if err_metric else min(1, results_df[metric].max() + 0.05)
     # ax.set_ylim(min_r2, max_r2)
 
-    ax.set_ylim(0.69, 0.86)
+    ax.set_ylim(0.56, 0.86)
     #     ax.set_ylim(0.68, 0.87)
     yticks = [0.6,0.65, 0.7, 0.75, 0.8, 0.85]
     ax.set_yticks(yticks)

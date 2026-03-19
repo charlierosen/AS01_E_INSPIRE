@@ -3,10 +3,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
 from src.data_prep import prepare_data
 
@@ -27,7 +27,7 @@ def perform_cv_classification(df, FEATURES, threshold, MODEL_PARAMS, n_splits=5)
     precisions = []
     recalls = []
     f1_scores = []
-    feature_importance_sums = {feature: 0 for feature in FEATURES}
+    # SVC does not expose feature importances
 
     # Perform k-fold cross-validation
     for train_idx, test_idx in kf.split(X):
@@ -41,11 +41,11 @@ def perform_cv_classification(df, FEATURES, threshold, MODEL_PARAMS, n_splits=5)
         X_test_scaled = scaler.transform(X_test)
 
         # Train model
-        rf_model = RandomForestClassifier(**MODEL_PARAMS)
-        rf_model.fit(X_train_scaled, y_train)
+        model = SVC(**MODEL_PARAMS)
+        model.fit(X_train_scaled, y_train)
 
         # Make predictions
-        y_pred = rf_model.predict(X_test_scaled)
+        y_pred = model.predict(X_test_scaled)
 
         # Calculate metrics
         accuracies.append(accuracy_score(y_test, y_pred))
@@ -53,12 +53,8 @@ def perform_cv_classification(df, FEATURES, threshold, MODEL_PARAMS, n_splits=5)
         recalls.append(recall_score(y_test, y_pred, zero_division=0))
         f1_scores.append(f1_score(y_test, y_pred, zero_division=0))
 
-        # Accumulate feature importances
-        for i, feature in enumerate(FEATURES):
-            feature_importance_sums[feature] += rf_model.feature_importances_[i]
-
-    # Calculate average feature importances
-    feature_importances = {feature: value / n_splits for feature, value in feature_importance_sums.items()}
+    # No feature importances for SVC
+    feature_importances = None
 
     # Calculate class distribution
     class_dist = {
@@ -96,13 +92,11 @@ def run_classification_analysis(thresholds, features=None, dataset_mode='mixed',
 
     # Model parameters
     MODEL_PARAMS = {
-        'max_depth': 8,
-        'max_features': 0.8,
-        'criterion': 'gini',
-        'min_samples_leaf': 3,
-        'min_samples_split': 5,
-        'n_estimators': 50,
-        'random_state': 42
+        'C': 1.0,
+        'gamma': 'scale',
+        'kernel': 'rbf',
+        'class_weight': 'balanced',
+        'random_state': 42,
     }
 
     # Prepare data - only need train_df
@@ -218,6 +212,9 @@ def plot_feature_importance_trends(feature_importance_by_threshold, feature_disp
     """
     Plot how feature importance changes with different classification thresholds
     """
+    # Skip plotting if we have no importances (e.g., SVC)
+    if not feature_importance_by_threshold or all(v is None for v in feature_importance_by_threshold.values()):
+        return
     # Set LaTeX style for plots
     plt.rcParams.update({
         "text.usetex": True,
