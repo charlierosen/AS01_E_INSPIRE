@@ -1,3 +1,5 @@
+import contextlib
+import io
 import os
 os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
@@ -131,9 +133,10 @@ def _dor_for_alpha(alpha_str, galaxy, wave, velscale, FWHM_gal, univ_age,
     reg_dim = sps.templates.shape[1:]
     stars_templates = sps.templates.reshape(sps.templates.shape[0], -1)
     lam_range_gal = np.array([wave.min(), wave.max()])
-    gas_templates, gas_names, _ = util.emission_lines(
-        sps.ln_lam_temp, lam_range_gal, FWHM_gal,
-        tie_balmer=tie_balmer, limit_doublets=limit_doublets)
+    with contextlib.redirect_stdout(io.StringIO()):
+        gas_templates, gas_names, _ = util.emission_lines(
+            sps.ln_lam_temp, lam_range_gal, FWHM_gal,
+            tie_balmer=tie_balmer, limit_doublets=limit_doublets)
     templates = np.column_stack([stars_templates, gas_templates])
     n_temps = stars_templates.shape[1]
     n_forbidden = np.sum(["[" in a for a in gas_names])
@@ -157,6 +160,7 @@ def fit_galaxy(row):
     Returns a result dict. Designed for multiprocessing — no FITS/PDF output."""
     data_dir = Path('../data') if Path('../data').exists() else Path('data')
     nrand = row['_nrand']
+    H0 = row.get('_H0', 75.0)
     name = row['ID_INSPIRE']
 
     try:
@@ -189,7 +193,7 @@ def fit_galaxy(row):
 
         velscale = c * np.log(wave[-1] / wave[0]) / (wave.size - 1)
         FWHM_gal = 2.76 / (1 + redshift)
-        univ_age = NedCalculator(redshift).zage_Gyr
+        univ_age = NedCalculator(redshift, H0=H0).zage_Gyr
         start = [[vel, sigma], [vel, sigma], [vel, sigma]]
 
         # --- Build templates for main alpha ---
@@ -199,9 +203,10 @@ def fit_galaxy(row):
         reg_dim = sps.templates.shape[1:]
         stars_templates = sps.templates.reshape(sps.templates.shape[0], -1)
         lam_range_gal = np.array([wave.min(), wave.max()])
-        gas_templates, gas_names, _ = util.emission_lines(
-            sps.ln_lam_temp, lam_range_gal, FWHM_gal,
-            tie_balmer=tie_balmer, limit_doublets=limit_doublets)
+        with contextlib.redirect_stdout(io.StringIO()):
+            gas_templates, gas_names, _ = util.emission_lines(
+                sps.ln_lam_temp, lam_range_gal, FWHM_gal,
+                tie_balmer=tie_balmer, limit_doublets=limit_doublets)
         templates = np.column_stack([stars_templates, gas_templates])
         n_temps = stars_templates.shape[1]
         n_forbidden = np.sum(["[" in a for a in gas_names])
